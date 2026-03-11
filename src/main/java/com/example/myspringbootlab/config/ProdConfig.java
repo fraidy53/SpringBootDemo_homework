@@ -12,7 +12,7 @@ public class ProdConfig {
 
     @Bean
     public MyEnvironment myEnvironment(){
-        return myEnvironment().builder()
+        return MyEnvironment.builder()
                 .mode("운영환경")
                 .build();
     }
