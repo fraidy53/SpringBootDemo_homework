@@ -2,18 +2,22 @@ package com.example.myspringbootlab.advice;
 
 import com.example.myspringbootlab.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 /**
  * 전역 예외 처리 클래스
  * @RestControllerAdvice: 모든 @RestController에서 발생하는 예외를 처리
  */
-@RestControllerAdvice
+@RestControllerAdvice // @ControllerAdvice + @ResponseBody
 public class DefaultExceptionAdvice {
 
     /**
@@ -42,6 +46,56 @@ public class DefaultExceptionAdvice {
     }
 
     /**
+     * @Valid 검증 실패를 처리한다.
+     *
+     * @param ex MethodArgumentNotValidException
+     * @param request HttpServletRequest
+     * @return ResponseEntity<ErrorObject> - 400 Bad Request
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorObject> handleValidationException(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
+
+        String validationMessage = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(this::formatFieldError)
+                .collect(Collectors.joining(", "));
+
+        ErrorObject errorObject = ErrorObject.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(validationMessage)
+                .path(request.getRequestURI())
+                .build();
+
+        return new ResponseEntity<>(errorObject, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * DB 제약조건(중복키/NOT NULL 등) 위반을 처리한다.
+     *
+     * @param ex DataIntegrityViolationException
+     * @param request HttpServletRequest
+     * @return ResponseEntity<ErrorObject> - 409 Conflict
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorObject> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request) {
+
+        ErrorObject errorObject = ErrorObject.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .message("데이터 무결성 오류입니다. 중복 값 또는 제약조건을 확인하세요.")
+                .path(request.getRequestURI())
+                .build();
+
+        return new ResponseEntity<>(errorObject, HttpStatus.CONFLICT);
+    }
+
+    /**
      * 일반 예외 처리 (예상하지 못한 에러)
      *
      * @param ex Exception
@@ -62,5 +116,8 @@ public class DefaultExceptionAdvice {
 
         return new ResponseEntity<>(errorObject, HttpStatus.INTERNAL_SERVER_ERROR);
     }
-}
 
+    private String formatFieldError(FieldError error) {
+        return error.getField() + ": " + error.getDefaultMessage();
+    }
+}
