@@ -1,140 +1,203 @@
 package com.example.myspringbootlab;
 
+import com.example.myspringbootlab.Repository.BookDetailRepository;
 import com.example.myspringbootlab.Repository.BookRepository;
 import com.example.myspringbootlab.entity.Book;
-import org.junit.jupiter.api.Disabled;
+import com.example.myspringbootlab.entity.BookDetail;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.annotation.Rollback;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
- * BookRepository 통합 테스트 클래스
- *
- * @SpringBootTest(webEnvironment = NONE): 웹 서버를 시작하지 않고 테스트 실행 (8080 포트 충돌 방지)
- * @ActiveProfiles("prod"): prod 프로파일 활성화 (MariaDB lab_db 사용)
- * @Transactional: 각 테스트 메서드를 트랜잭션으로 감싸서 실행 후 자동 롤백
+ * Book/BookDetail 레포지토리 테스트.
+ * @DataJpaTest는 JPA 관련 컴포넌트만 로드하여 빠르게 영속성 계층을 검증한다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("prod")
-@Transactional
+@DataJpaTest
 public class BookRepositoryTest {
 
-    // Spring 컨테이너에서 BookRepository 빈을 자동 주입
     @Autowired
-    BookRepository bookRepository;
+    private BookRepository bookRepository;
 
-    /**
-     * 도서 등록 테스트 (CREATE)
-     *
-     * @Test: JUnit 테스트 메서드임을 표시
-     * @Rollback(false): 테스트 후 데이터를 롤백하지 않고 DB에 실제로 저장
-     * @Disabled: 이 테스트를 비활성화 (다른 테스트와 충돌 방지)
-     *
-     * 동작: Book 객체 2개를 생성하여 DB에 저장
-     */
+    @Autowired
+    private BookDetailRepository bookDetailRepository;
+
     @Test
-    @Rollback(value = false)
-    @Disabled
-    void testCreateBook(){
-        // 첫 번째 도서 객체 생성 및 속성 설정
-        Book book1 = new Book();
-        book1.setTitle("스프링 부트 입문");
-        book1.setAuthor("홍길동");
-        book1.setIsbn("9788956746425");
-        book1.setPrice(30000);
-        book1.setPublishDate(LocalDate.of(2025,5,7));
+    public void createBookWithBookDetail() { // 책과 책 상세 정보를 함께 저장하는 테스트
+        // 1:1 저장 + cascade 확인, cascade : Book 엔티티가 저장될 때 BookDetail도 함께 저장되는지 검증
+        // Given
+        Book book = Book.builder()
+                .title("Clean Code")
+                .author("Robert C. Martin")
+                .isbn("9780132350884")
+                .price(45)
+                .publishDate(LocalDate.of(2008, 8, 1))
+                .build();
 
-        // 두 번째 도서 객체 생성 및 속성 설정
-        Book book2 = new Book();
-        book2.setTitle("JPA 프로그래밍");
-        book2.setAuthor("박둘리");
-        book2.setIsbn("9788956746432");
-        book2.setPrice(35000);
-        book2.setPublishDate(LocalDate.of(2025,4,30));
+        BookDetail bookDetail = BookDetail.builder()
+                .description("A handbook of agile software craftsmanship")
+                .language("English")
+                .pageCount(464)
+                .publisher("Prentice Hall")
+                .coverImageUrl("https://example.com/cleancode.jpg")
+                .edition("1st")
+                .book(book)
+                .build();
 
-        // JpaRepository의 save() 메서드로 DB에 저장
-        // ID가 없으면 INSERT, 있으면 UPDATE 수행
-        bookRepository.save(book1);
-        bookRepository.save(book2);
+        book.setBookDetail(bookDetail);
+
+        // When
+        Book savedBook = bookRepository.save(book);
+
+        // Then
+        assertThat(savedBook).isNotNull();
+        assertThat(savedBook.getId()).isNotNull();
+        assertThat(savedBook.getTitle()).isEqualTo("Clean Code");
+        assertThat(savedBook.getIsbn()).isEqualTo("9780132350884");
+        assertThat(savedBook.getBookDetail()).isNotNull();
+        assertThat(savedBook.getBookDetail().getPublisher()).isEqualTo("Prentice Hall");
+        assertThat(savedBook.getBookDetail().getPageCount()).isEqualTo(464);
     }
 
-    /**
-     * ISBN으로 도서 조회 테스트 (READ)
-     *
-     * 동작: ISBN 번호로 도서를 조회하여 존재하면 출력
-     * Optional<Book>: 조회 결과가 없을 수 있으므로 Optional로 감싸서 반환
-     */
     @Test
-    void testFindByIsbn() {
-        // ISBN으로 도서 조회 (Spring Data JPA의 쿼리 메서드)
-        Optional<Book> book = bookRepository.findByIsbn("9788956746425");
+    public void findBookByIsbn() { // isbn으로 책을 조회하는 테스트
+        // Given
+        Book book = Book.builder()
+                .title("Clean Code")
+                .author("Robert C. Martin")
+                .isbn("9780132350884")
+                .price(45)
+                .publishDate(LocalDate.of(2008, 8, 1))
+                .build();
 
-        // Optional이 값을 포함하고 있으면 람다식 실행 (도서 정보 출력)
-        // ifPresent(): NullPointerException 방지
-        book.ifPresent(System.out::println);
+        BookDetail bookDetail = BookDetail.builder()
+                .description("A handbook of agile software craftsmanship")
+                .language("English")
+                .pageCount(464)
+                .publisher("Prentice Hall")
+                .coverImageUrl("https://example.com/cleancode.jpg")
+                .edition("1st")
+                .book(book)
+                .build();
+
+        book.setBookDetail(bookDetail);
+        bookRepository.save(book);
+
+        // When
+        Optional<Book> foundBook = bookRepository.findByIsbn("9780132350884");
+
+        // Then
+        assertThat(foundBook).isPresent();
+        assertThat(foundBook.get().getTitle()).isEqualTo("Clean Code");
     }
 
-    /**
-     * 저자명으로 도서 목록 조회 테스트 (READ)
-     *
-     * 동작: 저자명으로 도서 목록을 조회하여 모두 출력
-     * List<Book>: 같은 저자의 도서가 여러 권일 수 있으므로 List로 반환
-     */
     @Test
-    void testFindByAuthor() {
-        // 저자명으로 도서 목록 조회 (Spring Data JPA의 쿼리 메서드)
-        List<Book> books = bookRepository.findByAuthor("홍길동");
+    public void findByIdWithBookDetail() { // fetch join을 사용하여 ID로 책과 책 상세 정보를 함께 조회하는 테스트
+        // Given
+        Book book = Book.builder()
+                .title("Clean Code")
+                .author("Robert C. Martin")
+                .isbn("9780132350884")
+                .price(45)
+                .publishDate(LocalDate.of(2008, 8, 1))
+                .build();
 
-        // forEach(): 리스트의 각 요소를 순회하며 출력
-        // 메서드 참조(::) 사용
-        books.forEach(System.out::println);
+        BookDetail bookDetail = BookDetail.builder()
+                .description("A handbook of agile software craftsmanship")
+                .language("English")
+                .pageCount(464)
+                .publisher("Prentice Hall")
+                .coverImageUrl("https://example.com/cleancode.jpg")
+                .edition("1st")
+                .book(book)
+                .build();
+
+        book.setBookDetail(bookDetail);
+        Book savedBook = bookRepository.save(book);
+
+        // When
+        Optional<Book> foundBook = bookRepository.findByIdWithBookDetail(savedBook.getId());
+        // findByIdWithBookDetail 메서드는 fetch join을 사용하여 Book과 BookDetail을 한 번의 쿼리로 조회한다.
+        // 따라서 N+1 문제 없이 책과 책 상세 정보를 함께 가져올 수 있다.
+
+        // Then
+        assertThat(foundBook).isPresent();
+        assertThat(foundBook.get().getBookDetail()).isNotNull();
+        assertThat(foundBook.get().getBookDetail().getPublisher()).isEqualTo("Prentice Hall");
     }
 
-    /**
-     * 도서 정보 수정 테스트 (UPDATE)
-     *
-     * 동작: ISBN으로 도서를 조회한 후, 가격을 수정하여 저장
-     * JPA의 변경 감지(Dirty Checking) 또는 save() 메서드로 업데이트
-     */
     @Test
-    void testUpdateBook() {
-        // ISBN으로 도서 조회
-        Optional<Book> optionalBook = bookRepository.findByIsbn("9788956746425");
+    public void findBooksByAuthor() { // 저자 이름에 특정 문자열이 포함된 책을 검색하는 테스트 (대소문자 무시)
+        // Given
+        Book book1 = Book.builder()
+                .title("Clean Code")
+                .author("Robert C. Martin")
+                .isbn("9780132350884")
+                .price(45)
+                .publishDate(LocalDate.of(2008, 8, 1))
+                .build();
 
-        // 도서가 존재하는지 확인
-        if(optionalBook.isPresent()){
-            // Optional에서 실제 Book 객체 꺼내기
-            Book book = optionalBook.get();
+        Book book2 = Book.builder()
+                .title("Clean Architecture")
+                .author("Robert C. Martin")
+                .isbn("9780134494166")
+                .price(50)
+                .publishDate(LocalDate.of(2017, 9, 20))
+                .build();
 
-            // 가격 수정 (30000원 → 32000원)
-            book.setPrice(32000);
+        Book book3 = Book.builder()
+                .title("Effective Java")
+                .author("Joshua Bloch")
+                .isbn("9780134685991")
+                .price(55)
+                .publishDate(LocalDate.of(2018, 1, 6))
+                .build();
 
-            // 수정된 엔티티 저장 (UPDATE 쿼리 실행)
-            // JPA가 ID가 있는 엔티티는 UPDATE로 처리
-            bookRepository.save(book);
-        }
+        bookRepository.saveAll(List.of(book1, book2, book3));
+
+        // When
+        List<Book> martinBooks = bookRepository.findByAuthorContainingIgnoreCase("martin");
+
+        // Then
+        assertThat(martinBooks).hasSize(2);
+        assertThat(martinBooks).extracting(Book::getTitle)
+                .containsExactlyInAnyOrder("Clean Code", "Clean Architecture");
     }
 
-    /**
-     * 도서 삭제 테스트 (DELETE)
-     *
-     * 동작: ISBN으로 도서를 조회한 후 삭제
-     */
     @Test
-    void testDeleteBook() {
-        // ISBN으로 도서 조회
-        Optional<Book> optionalBook = bookRepository.findByIsbn("9788956746425");
+    public void findBookDetailByBookId() { // bookId로 책 상세 정보를 조회하는 테스트. 상세 레포지토리 조회 확인
+        // Given
+        Book book = Book.builder()
+                .title("Clean Code")
+                .author("Robert C. Martin")
+                .isbn("9780132350884")
+                .price(45)
+                .publishDate(LocalDate.of(2008, 8, 1))
+                .build();
 
-        // 도서가 존재하면 삭제 (람다식 사용)
-        // ifPresent(): Optional에 값이 있을 때만 실행
-        // delete(): JpaRepository의 삭제 메서드 (DELETE 쿼리 실행)
-        optionalBook.ifPresent(book -> bookRepository.delete(book));
+        BookDetail bookDetail = BookDetail.builder()
+                .description("A handbook of agile software craftsmanship")
+                .language("English")
+                .pageCount(464)
+                .publisher("Prentice Hall")
+                .coverImageUrl("https://example.com/cleancode.jpg")
+                .edition("1st")
+                .book(book)
+                .build();
+
+        book.setBookDetail(bookDetail);
+        Book savedBook = bookRepository.save(book);
+
+        // When
+        Optional<BookDetail> foundBookDetail = bookDetailRepository.findByBookId(savedBook.getId());
+
+        // Then
+        assertThat(foundBookDetail).isPresent();
+        assertThat(foundBookDetail.get().getDescription()).contains("agile software craftsmanship");
     }
 }

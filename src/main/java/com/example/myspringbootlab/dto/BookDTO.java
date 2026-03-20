@@ -1,84 +1,129 @@
 package com.example.myspringbootlab.dto;
 
-import jakarta.validation.constraints.Min;
+import com.example.myspringbootlab.entity.Book;
+import com.example.myspringbootlab.entity.BookDetail;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
 /**
- * API 요청/응답에서 사용하는 Book DTO 모음 클래스
+ * Book API 요청/응답 DTO 묶음 클래스.
  */
 public class BookDTO {
 
     /**
-     * 도서 생성 요청 DTO
-     * 모든 필드는 필수값으로 검증한다.
+     * 생성/수정 요청 DTO.
      */
-    @Getter
-    @Builder
+    @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class BookCreateRequest {
+    @Builder
+    public static class Request {
 
-        @NotBlank(message = "제목은 필수입니다.")
+        @NotBlank(message = "Book title is required")
         private String title;
 
-        @NotBlank(message = "저자는 필수입니다.")
+        @NotBlank(message = "Author name is required")
         private String author;
 
-        @NotBlank(message = "ISBN은 필수입니다.")
-        @Pattern(regexp = "^[0-9]{13}$", message = "ISBN은 13자리 숫자여야 합니다.")
+        @NotBlank(message = "ISBN is required")
+        @Pattern(
+                // regexp 설명: ISBN-10 또는 ISBN-13 형식 허용 (하이픈 포함 가능)
+                regexp = "^(?=(?:\\D*\\d){10}(?:(?:\\D*\\d){3})?$)[\\d-]+$",
+                message = "ISBN must be valid (10 or 13 digits, with or without hyphens)"
+        )
         private String isbn;
 
-        @NotNull(message = "가격은 필수입니다.")
-        @Min(value = 1, message = "가격은 1원 이상이어야 합니다.")
+        @PositiveOrZero(message = "Price must be positive or zero")
         private Integer price;
 
-        @NotNull(message = "출판일은 필수입니다.")
+        @Past(message = "Publish date must be in the past")
         private LocalDate publishDate;
+
+        @Valid // BookDetailDTO의 유효성 검사 활성화, 중첩 상세 검증 가능
+        private BookDetailDTO detailRequest;
     }
 
     /**
-     * 도서 수정 요청 DTO
-     * null이 아닌 필드만 부분 업데이트에 반영한다.
+     * 상세 정보 요청 DTO.
      */
-    @Getter
-    @Builder
+    @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class BookUpdateRequest {
-
-        private String title;
-
-        private String author;
-
-        @Min(value = 1, message = "가격은 1원 이상이어야 합니다.")
-        private Integer price;
-
-        private LocalDate publishDate;
+    @Builder
+    public static class BookDetailDTO {
+        private String description;
+        private String language;
+        private Integer pageCount;
+        private String publisher;
+        private String coverImageUrl;
+        private String edition;
     }
 
     /**
-     * 도서 응답 DTO
+     * 응답 DTO.
      */
-    @Getter
-    @Builder
+    @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class BookResponse {
-
+    @Builder
+    public static class Response { // API 응답에 필요한 필드와 BookDetailResponse를 포함하는 DTO
         private Long id;
         private String title;
         private String author;
         private String isbn;
         private Integer price;
         private LocalDate publishDate;
+        private BookDetailResponse detail;
+
+        public static Response fromEntity(Book book) { // Book 엔티티를 Response DTO로 변환하는 정적 팩토리 메서드
+            BookDetail detail = book.getBookDetail();
+            BookDetailResponse detailResponse = detail != null
+                    ? BookDetailResponse.builder()
+                    .id(detail.getId())
+                    .description(detail.getDescription())
+                    .language(detail.getLanguage())
+                    .pageCount(detail.getPageCount())
+                    .publisher(detail.getPublisher())
+                    .coverImageUrl(detail.getCoverImageUrl())
+                    .edition(detail.getEdition())
+                    .build()
+                    : null;
+
+            return Response.builder()
+                    .id(book.getId())
+                    .title(book.getTitle())
+                    .author(book.getAuthor())
+                    .isbn(book.getIsbn())
+                    .price(book.getPrice())
+                    .publishDate(book.getPublishDate())
+                    .detail(detailResponse)
+                    .build();
+        }
+    }
+
+    /**
+     * 상세 정보 응답 DTO.
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class BookDetailResponse { // 상세 응답 데이터
+        private Long id;
+        private String description;
+        private String language;
+        private Integer pageCount;
+        private String publisher;
+        private String coverImageUrl;
+        private String edition;
     }
 }
-

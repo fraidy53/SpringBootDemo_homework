@@ -24,58 +24,82 @@ public class BookService {
     private final BookMapper bookMapper;
 
     /**
-     * 도서를 생성한다.
+     * 전체 도서를 상세 정보와 함께 조회한다.
      */
-    @Transactional
-    public BookDTO.BookResponse createBook(BookDTO.BookCreateRequest request) {
-        Book savedBook = bookRepository.save(bookMapper.toEntity(request));
-        return bookMapper.toResponse(savedBook);
+    public List<BookDTO.Response> getAllBooks() {
+        return bookRepository.findAll().stream()
+                .map(bookMapper::toResponse)
+                .toList();
     }
 
     /**
-     * 전체 도서 목록을 조회한다.
+     * ID로 도서를 상세 정보와 함께 조회한다.
      */
-    public List<BookDTO.BookResponse> getAllBooks() {
-        return bookRepository.findAll()
+    public BookDTO.Response getBookById(Long id) {
+        Book book = bookRepository.findByIdWithBookDetail(id)
+                .orElseThrow(() -> new BusinessException("ID: " + id + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        return bookMapper.toResponse(book);
+    }
+
+    /**
+     * ISBN으로 도서를 상세 정보와 함께 조회한다.
+     */
+    public BookDTO.Response getBookByIsbn(String isbn) {
+        Book book = bookRepository.findByIsbnWithBookDetail(isbn)
+                .orElseThrow(() -> new BusinessException("ISBN: " + isbn + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        return bookMapper.toResponse(book);
+    }
+
+    /**
+     * 저자 키워드로 도서를 검색한다.
+     */
+    public List<BookDTO.Response> searchByAuthor(String author) {
+        return bookRepository.findByAuthorContainingIgnoreCase(author)
                 .stream()
                 .map(bookMapper::toResponse)
                 .toList();
     }
 
     /**
-     * ID로 도서를 조회한다. 없으면 404 예외를 던진다.
+     * 제목 키워드로 도서를 검색한다.
      */
-    public BookDTO.BookResponse getBookById(Long id) {
-        Book book = bookRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("ID: " + id + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        return bookMapper.toResponse(book);
+    public List<BookDTO.Response> searchByTitle(String title) {
+        return bookRepository.findByTitleContainingIgnoreCase(title)
+                .stream()
+                .map(bookMapper::toResponse)
+                .toList();
     }
 
     /**
-     * ISBN으로 도서를 조회한다. 없으면 404 예외를 던진다.
-     */
-    public BookDTO.BookResponse getBookByIsbn(String isbn) {
-        Book book = bookRepository.findByIsbn(isbn)
-                .orElseThrow(() -> new BusinessException("ISBN: " + isbn + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        return bookMapper.toResponse(book);
-    }
-
-    /**
-     * 도서 정보를 부분 수정한다. null이 아닌 값만 반영한다.
+     * 새 도서를 등록한다.
      */
     @Transactional
-    public BookDTO.BookResponse updateBook(Long id, BookDTO.BookUpdateRequest request) {
-        Book existBook = bookRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("ID: " + id + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-
-        bookMapper.applyNonNullUpdates(existBook, request);
-        Book updatedBook = bookRepository.save(existBook);
-
-        return bookMapper.toResponse(updatedBook);
+    public BookDTO.Response createBook(BookDTO.Request request) {
+        validateIsbnDuplicate(request.getIsbn());
+        Book savedBook = bookRepository.save(bookMapper.toEntity(request));
+        return bookMapper.toResponse(savedBook);
     }
 
     /**
-     * 도서를 삭제한다. 없으면 404 예외를 던진다.
+     * 기존 도서를 수정한다.
+     */
+    @Transactional
+    public BookDTO.Response updateBook(Long id, BookDTO.Request request) {
+        Book existing = bookRepository.findByIdWithBookDetail(id)
+                .orElseThrow(() -> new BusinessException("ID: " + id + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        boolean isbnChanged = !existing.getIsbn().equals(request.getIsbn());
+        if (isbnChanged) {
+            validateIsbnDuplicate(request.getIsbn());
+        }
+
+        bookMapper.updateEntity(existing, request);
+        Book updated = bookRepository.save(existing);
+        return bookMapper.toResponse(updated);
+    }
+
+    /**
+     * 도서를 삭제한다.
      */
     @Transactional
     public void deleteBook(Long id) {
@@ -83,5 +107,10 @@ public class BookService {
                 .orElseThrow(() -> new BusinessException("ID: " + id + " 도서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
         bookRepository.delete(book);
     }
+    // 공통 검증 : ISBN 중복 여부를 검증한다. 이미 존재하는 ISBN이면 BusinessException을 발생시킨다.
+    private void validateIsbnDuplicate(String isbn) {
+        if (bookRepository.existsByIsbn(isbn)) {
+            throw new BusinessException("ISBN: " + isbn + " 는 이미 등록된 도서입니다.", HttpStatus.CONFLICT);
+        }
+    }
 }
-

@@ -4,7 +4,7 @@ import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
- * 비즈니스 로직 예외 클래스
+ * 비즈니스 로직 예외 클래스 : 비즈니스 로직에서 발생하는 예외를 처리하기 위한 클래스입니다.
  * RuntimeException을 상속받아 언체크 예외로 처리
  */
 @Getter
